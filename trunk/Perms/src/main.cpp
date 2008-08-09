@@ -48,6 +48,8 @@ struct option long_options[] =
 		{"users",0, 0,'u'},
 		{"exclude",1,0,'e'},
 		{"leave",0,0,'l'},
+		{"verify",0,0,'v'},
+		{"fix",0,0,'f'},
 		{"help",0,0,'?'},
 		{0, 0, 0, 0}
 	};
@@ -61,6 +63,8 @@ bool	nolinks=false;
 bool	incsystem=false;
 bool	incusers=false;
 bool	samedevice=true;
+bool	verify=false;
+bool	fix=false;
 
 char	cwd[256];
 char	*excludes[256];
@@ -125,6 +129,95 @@ bool skipdir(char *filename)
 	if (strcasecmp(filename,"..")==0)
 		retval=true;
 
+	return retval;
+}
+
+int verifyperms(void)
+{
+	char	data[40];
+	char	buffer[4096];
+	struct	stat	stat_p;
+	int	staterr=-1;
+	bool	dofix;
+	int	retval=0;
+
+	fp = fopen(DBNAME,"r");
+	if (fp==0)
+		{
+		printf("Can't open DB file for reading\n");
+		return -1;
+		}
+
+	while(true)
+		{
+		if (fgets(buffer,4095,fp)!=NULL)
+			{
+			dofix=false;
+			fgets(data,40,fp);
+			char *perms,*uid,*gid;
+
+			perms=strtok(data,":");
+			uid=strtok(NULL,":");
+			gid=strtok(NULL,":");			
+			buffer[strlen(buffer)-1]=0;
+
+			if (report==true)
+				{
+				printf("Verifying permissions of %s\n",buffer);
+				}
+
+			staterr=stat (buffer, &stat_p);
+			if ( staterr==-1)
+				printf(" Error occoured attempting to stat %s\n",buffer);
+			else
+				{
+				if (stat_p.st_mode!=atol(perms))
+					{
+					if (report==true)
+						{
+						printf ("Error on permissions of file %s\n",buffer);
+						printf ("Permissions are %o, should be %o\n",stat_p.st_mode,atol(perms));
+						}
+					if (fix==true)
+						{
+						if (report==true)
+							printf("Fixing permissions\n");
+						chmod (buffer,atol(perms));
+						}
+					}
+				if (stat_p.st_uid!=atol(uid))
+					{
+					if (report==true)
+						{
+						printf ("Error on users of file %s\n",buffer);
+						printf ("User is %i, should be %i\n",stat_p.st_uid,atol(uid));
+						}
+					dofix=true;
+					}
+				if (stat_p.st_gid!=atol(gid))
+					{
+					if (report==true)
+						{
+						printf ("Error on group of file %s\n",buffer);
+						printf ("Group is %i, should be %i\n",stat_p.st_gid,atol(gid));
+						}
+					dofix=true;
+					}
+				if (dofix==true && fix==true)
+					{
+					retval=1;
+					if (report==true)
+						printf("Fixing users and groups\n");
+					chown(buffer,atol(uid),atol(gid));
+					}
+				else
+					retval=2;
+
+				}
+			}
+		else
+			break;
+		}
 	return retval;
 }
 
@@ -234,6 +327,8 @@ void printhelp(void)
 	printf("Create a database of permissions, uids and guids for files stating at [STARTDIRECTORY]\n");
 	printf("-c, --create	create a database\n");
 	printf("-r, --repair	repair file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n");
+	printf("-v, --verify	verify file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n");
+	printf("-f, --fix	when used with the --verify switch will attempt to repair the permissions, users and groups\n");
 	printf("-q, --quiet	only report errors\n");
 	printf("-n, --nolinks	don't recurse into folders that are links\n");
 	printf("-s, --system	recurse into the system folders /sys,/proc,/dev, /tmp, /lost+found (Setting permissions on these files doesn't make a lot of sense as they are (mostly) recreated at boot time)\n");
@@ -250,6 +345,8 @@ void printhelp(void)
 	printf("sudo perms --create --users /\n");
 	printf("Repair permissions for user 'someuser', obviously you must have created the database first!\n");
 	printf("cd /home/someuser && sudo perms --repair\n");
+	printf("Verify and fix  permissions for the current directory\n");
+	printf("perms --verify --fix\n");
 	printf("Repair permissions for the current directory\n");
 	printf("perms --repair\n\n");
 	printf("You may need to run perms as root to be able to read/repair certain folders.\n");
@@ -265,7 +362,7 @@ int main(int argc, char **argv)
 	while (1)
 		{
 		int option_index = 0;
-		c = getopt_long (argc, argv, ":e:qcrnus?hl",long_options, &option_index);
+		c = getopt_long (argc, argv, ":e:qcrnus?hlvf",long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -305,6 +402,15 @@ int main(int argc, char **argv)
 				samedevice=false;
 				break;
 		
+		
+			case 'v':
+				verify=true;
+				break;
+		
+			case 'f':
+				fix=true;
+				break;
+		
 			case '?':
 			case 'h':
 				printhelp();
@@ -332,6 +438,7 @@ struct	stat	stat_p;
 
 	stat(".",&stat_p);
 	thisdevice=stat_p.st_dev;
+	getcwd(cwd,255);
 
 	if (create==true)
 		{
@@ -342,7 +449,12 @@ struct	stat	stat_p;
 			return 1;
 			}
 
-		fprintf(fp,"%s\n%i:%i:%i\n",".",stat_p.st_mode & 0777,stat_p.st_uid,stat_p.st_gid);
+		fprintf(fp,"%s\n%i:%i:%i\n",".",stat_p.st_mode,stat_p.st_uid,stat_p.st_gid);
+		}
+
+	if (verify==true)
+		{
+		return (verifyperms());
 		}
 
 	if (report==true)
@@ -354,7 +466,6 @@ struct	stat	stat_p;
 		return 0;
 		}
 
-	getcwd(cwd,255);
 	parsedir((char*)cwd);
 
 	if (fp!=0)
