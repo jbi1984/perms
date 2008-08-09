@@ -261,8 +261,7 @@ void printhelp(void)
 int main(int argc, char **argv)
 {
 	int c;
-printf("hello me\n");
-return 0;
+
 	while (1)
 		{
 		int option_index = 0;
