@@ -1,0 +1,21 @@
+#
+#
+AC_INIT([Perms],[0.1],[XXX],[Perms])
+
+AC_CONFIG_HEADER([config.h])
+AC_PROG_CXX
+
+AM_INIT_AUTOMAKE
+
+AC_PROG_CC
+AC_HEADER_STDC
+
+AC_SUBST(CFLAGS)
+AC_SUBST(CPPFLAGS)
+AC_SUBST(LDFLAGS)
+
+CFLAGS=-Wall
+AC_SUBST(CFLAGS)
+
+AC_OUTPUT(Makefile Perms/app/Makefile Perms/debug/Makefile)#***MMM***
+

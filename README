@@ -1,0 +1,15 @@
+To build cd into this directory and use:
+
+./autogen.sh
+make
+sudo make install
+
+
+Or you can run the app direct by using ./Perms/app/perms
+A debug version is built in the folder ./Perms/debug
+
+
+You can supply arguments to autogen.sh which will be passed to the configure script ie:
+./autogen.sh --prefix=/some/other/installation/folder
+
+You will need automake 1.9
