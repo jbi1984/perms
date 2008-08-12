@@ -31,10 +31,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <time.h>
 #include <string.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <stdarg.h>
 
 #define DBNAME "./.permsDB"
 
@@ -50,6 +50,7 @@ struct option long_options[] =
 		{"leave",0,0,'l'},
 		{"verify",0,0,'v'},
 		{"fix",0,0,'f'},
+		{"strip",1,0,'t'},
 		{"help",0,0,'?'},
 		{0, 0, 0, 0}
 	};
@@ -65,12 +66,47 @@ bool	incusers=false;
 bool	samedevice=true;
 bool	verify=false;
 bool	fix=false;
+bool	strip=false;
 
 char	cwd[256];
 char	*excludes[256];
 int	excludescnt=0;
 int	thisdevice;
+char	*stripbuffer;
 
+void printout(const char *fmt, ...)
+{
+	va_list	ap;
+	int	i;
+	char	*s;
+
+	if (report==false)
+		return;
+
+	va_start(ap,fmt);
+	while (*fmt)
+		{
+        	switch(*fmt++)
+        		{
+			case 's':           
+				s=va_arg(ap,char *);
+				printf("%s",s);
+				break;
+			case 'i':           
+				i=va_arg(ap,int);
+				printf("%i",i);
+				break;
+			case 'o':           
+				i=va_arg(ap,int);
+				printf("%o",i);
+				break;
+			case 'n':
+				printf("\n");
+				break;
+			}
+		}
+	va_end(ap);
+}
 
 bool insidesysdirs(char *filename)
 {
@@ -106,6 +142,7 @@ bool insidesysdirs(char *filename)
 
 bool skipexclude(char *filename)
 {
+
 	int cnt=0;
 	bool retval=false;
 	while (cnt<excludescnt)
@@ -132,19 +169,43 @@ bool skipdir(char *filename)
 	return retval;
 }
 
+void stripdirs(char *filename)
+{
+	char	buffer[4096];
+	char	*startofdirs;
+	int	len=-1;
+	int	start=-1;
+	int	striplen=strlen(stripbuffer);
+	int	namelen=strlen(filename);
+
+	buffer[0]='.';
+	startofdirs=strstr(filename,stripbuffer);
+	if (startofdirs!=NULL)
+		{
+		len=(long)startofdirs-(long)filename;
+		memcpy(&buffer[1],&filename[0],len);
+		memcpy(&buffer[len+1],&filename[len+striplen],namelen-(len+striplen));		
+		buffer[namelen-(len+striplen)+1]=0;
+		strcpy(filename,buffer);
+		}
+}
+
 int verifyperms(void)
 {
 	char	data[40];
 	char	buffer[4096];
 	struct	stat	stat_p;
 	int	staterr=-1;
-	bool	dofix;
 	int	retval=0;
+
+	bool	uiderror;
+	bool	giderror;
+	bool	permserror;
 
 	fp = fopen(DBNAME,"r");
 	if (fp==0)
 		{
-		printf("Can't open DB file for reading\n");
+		fprintf(stderr,"Can't open DB file for reading\n");
 		return -1;
 		}
 
@@ -152,7 +213,13 @@ int verifyperms(void)
 		{
 		if (fgets(buffer,4095,fp)!=NULL)
 			{
-			dofix=false;
+			if (strip==true)
+				stripdirs((char*)&buffer[0]);
+
+			uiderror=false;
+			giderror=false;
+			permserror=false;
+
 			fgets(data,40,fp);
 			char *perms,*uid,*gid;
 
@@ -161,59 +228,52 @@ int verifyperms(void)
 			gid=strtok(NULL,":");			
 			buffer[strlen(buffer)-1]=0;
 
-			if (report==true)
-				{
-				printf("Verifying permissions of %s\n",buffer);
-				}
-
+			printout("sss","Verifying permissions of ",buffer,"...");
 			staterr=stat (buffer, &stat_p);
 			if ( staterr==-1)
-				printf(" Error occoured attempting to stat %s\n",buffer);
+				{
+				printout("sn","FAIL");
+				fprintf(stderr,"Error occoured attempting to stat %s\n",buffer);
+				continue;
+				}
 			else
 				{
 				if (stat_p.st_mode!=atol(perms))
-					{
-					if (report==true)
-						{
-						printf ("Error on permissions of file %s\n",buffer);
-						printf ("Permissions are %o, should be %o\n",stat_p.st_mode,atol(perms));
-						}
-					if (fix==true)
-						{
-						if (report==true)
-							printf("Fixing permissions\n");
-						chmod (buffer,atol(perms));
-						}
-					}
+					permserror=true;
 				if (stat_p.st_uid!=atol(uid))
-					{
-					if (report==true)
-						{
-						printf ("Error on users of file %s\n",buffer);
-						printf ("User is %i, should be %i\n",stat_p.st_uid,atol(uid));
-						}
-					dofix=true;
-					}
+					uiderror=true;
 				if (stat_p.st_gid!=atol(gid))
-					{
-					if (report==true)
-						{
-						printf ("Error on group of file %s\n",buffer);
-						printf ("Group is %i, should be %i\n",stat_p.st_gid,atol(gid));
-						}
-					dofix=true;
-					}
-				if (dofix==true && fix==true)
-					{
-					retval=1;
-					if (report==true)
-						printf("Fixing users and groups\n");
-					chown(buffer,atol(uid),atol(gid));
-					}
-				else
-					retval=2;
+					giderror=true;
+				}
+
+			if ((permserror==true || uiderror==true || giderror==true))
+				{
+				printout("sn","FAIL");
+				if (permserror==true)
+					printout("soson","Permissions are ",stat_p.st_mode,", should be ",atol(perms));
+
+				if (uiderror==true)
+					printout("sisin","User is ",stat_p.st_uid,", should be ",atol(uid));
+				if (giderror==true)
+					printout("sisin","Group is ",stat_p.st_gid,", should be ",atol(gid));
 
 				}
+			else
+				printout("sn","OK");
+			if (fix==true)
+				{
+				if (permserror==true)
+					{
+					printout("sn","Fixing permissions");
+					chmod (buffer,atol(perms));
+					}
+				if (uiderror==true || giderror==true)
+					{
+					printout("sn","Fixing users and groups");
+					chown(buffer,atol(uid),atol(gid));
+					}
+				}
+
 			}
 		else
 			break;
@@ -229,7 +289,7 @@ void repairfiles(void)
 	fp = fopen(DBNAME,"r");
 	if (fp==0)
 		{
-		printf("Can't open DB file for reading\n");
+		fprintf(stderr,"Can't open DB file for reading\n");
 		return;
 		}
 	
@@ -237,6 +297,8 @@ void repairfiles(void)
 		{
 		if (fgets(buffer,4095,fp)!=NULL)
 			{
+			if (strip==true)
+				stripdirs((char*)&buffer[0]);
 			fgets(data,40,fp);
 			char *perms,*uid,*gid;
 
@@ -247,10 +309,7 @@ void repairfiles(void)
 
 			chown (buffer,atol(uid),atol(gid));
 			chmod (buffer,atol(perms));
-			if (report==true)
-				{
-				printf("Setting permissions,uid and gid of %s to :%o:%s:%s",buffer,atoi(perms),uid,gid);
-				}
+			printout("sssossss","Setting permissions,uid and gid of ",buffer," to :",atoi(perms),":",uid,":",gid);
 			}
 		else
 			break;
@@ -279,21 +338,22 @@ void parsedir(char *filename)
 		else	
 			sprintf(buffer,"%s/%s",filename,dir_entry_p->d_name);
 
+		if (strip==true)
+			stripdirs((char*)&buffer[0]);
+
 		if (skipexclude(buffer)==true)
 			continue;
 
 		staterr=stat(buffer,&stat_p);
 
 		if ( staterr==-1)
-			printf(" Error occoured attempting to stat %s\n",buffer);
+			fprintf(stderr," Error occoured attempting to stat %s\n",buffer);
 		else
 			{
 			if (stat_p.st_dev!=thisdevice && samedevice==true)
 				continue;
+			printout("sssosisin","Permissions for ",buffer,"=",stat_p.st_mode," owner=",stat_p.st_uid," group=",stat_p.st_gid);
 
-			if (report==true)
-				printf("permissions for %s=%o owner=%i group=%i\n",buffer,stat_p.st_mode,stat_p.st_uid,stat_p.st_gid);
-		
 			if (create==true)
 				fprintf(fp,"%s\n%i:%i:%i\n",buffer,stat_p.st_mode,stat_p.st_uid,stat_p.st_gid);
 
@@ -304,7 +364,7 @@ void parsedir(char *filename)
 					staterr=lstat(buffer,&linkstat);
 					if ( staterr==-1)
 						{
-						printf(" Error occoured attempting to stat %s\n", dir_entry_p->d_name);
+						fprintf(stderr," Error occoured attempting to stat %s\n", dir_entry_p->d_name);
 						}
 					if (S_ISLNK(linkstat.st_mode))
 						continue;
@@ -362,7 +422,7 @@ int main(int argc, char **argv)
 	while (1)
 		{
 		int option_index = 0;
-		c = getopt_long (argc, argv, ":e:qcrnus?hlvf",long_options, &option_index);
+		c = getopt_long (argc, argv, ":et:qcrnus?hlvf",long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -411,6 +471,11 @@ int main(int argc, char **argv)
 				fix=true;
 				break;
 		
+			case 't':
+				strip=true;
+				stripbuffer=optarg;
+				break;
+		
 			case '?':
 			case 'h':
 				printhelp();
@@ -418,7 +483,7 @@ int main(int argc, char **argv)
 				break;
 
 			default:
-				printf ("?? Unknown argument ??\n");
+				fprintf(stderr,"?? Unknown argument ??\n");
 				return 1;
 			break;
 			}
@@ -428,7 +493,7 @@ int main(int argc, char **argv)
 		{
 		if (chdir(argv[optind]) == -1)
 			{
-			printf("Can't CD into directory %s\n",argv[optind]);
+			fprintf(stderr,"Can't CD into directory %s\n",argv[optind]);
 			return 1;
 			}
 		}
@@ -445,7 +510,7 @@ struct	stat	stat_p;
 		fp = fopen(DBNAME,"w");
 		if (fp==0)
 			{
-			printf("Can't open DB file for writing\n");
+			fprintf(stderr,"Can't open DB file for writing\n");
 			return 1;
 			}
 
@@ -457,8 +522,7 @@ struct	stat	stat_p;
 		return (verifyperms());
 		}
 
-	if (report==true)
-		printf("permissions for %s=%o owner=%i group=%i\n",".",stat_p.st_mode,stat_p.st_uid,stat_p.st_gid);
+	printout("sosisin","Permissions for .=",stat_p.st_mode," owner=",stat_p.st_uid," group=",stat_p.st_gid);
 
 	if (repair==true)
 		{
