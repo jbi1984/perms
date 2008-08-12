@@ -52,6 +52,7 @@ struct option long_options[] =
 		{"verify",0,0,'V'},
 		{"fix",0,0,'f'},
 		{"strip",1,0,'s'},
+		{"prefix",1,0,'p'},
 		{"version",0,0,'v'},
 		{"help",0,0,'?'},
 		{0, 0, 0, 0}
@@ -69,12 +70,14 @@ bool	samedevice=true;
 bool	verify=false;
 bool	fix=false;
 bool	strip=false;
+bool	prefix=false;
 
 char	cwd[256];
 char	*excludes[256];
 int	excludescnt=0;
 int	thisdevice;
 char	*stripbuffer;
+char	prefixbuffer[256]=".";
 
 void printout(const char *fmt, ...)
 {
@@ -171,6 +174,15 @@ bool skipdir(char *filename)
 	return retval;
 }
 
+void addprefix(char *filename)
+{
+	char	buffer[4096]={};
+
+	strcat(buffer,prefixbuffer);
+	strcat(buffer,filename);
+	strcpy(filename,buffer);
+}
+
 void stripdirs(char *filename)
 {
 	char	buffer[4096];
@@ -180,14 +192,13 @@ void stripdirs(char *filename)
 	int	striplen=strlen(stripbuffer);
 	int	namelen=strlen(filename);
 
-	buffer[0]='.';
 	startofdirs=strstr(filename,stripbuffer);
 	if (startofdirs!=NULL)
 		{
 		len=(long)startofdirs-(long)filename;
-		memcpy(&buffer[1],&filename[0],len);
-		memcpy(&buffer[len+1],&filename[len+striplen],namelen-(len+striplen));		
-		buffer[namelen-(len+striplen)+1]=0;
+		memcpy(&buffer[0],&filename[0],len);
+		memcpy(&buffer[len],&filename[len+striplen],namelen-(len+striplen));		
+		buffer[namelen-(len+striplen)]=0;
 		strcpy(filename,buffer);
 		}
 }
@@ -216,6 +227,9 @@ void verifyperms(void)
 			{
 			if (strip==true)
 				stripdirs((char*)&buffer[0]);
+
+			if (prefix==true || strip==true)
+				addprefix((char*)&buffer[0]);
 
 			uiderror=false;
 			giderror=false;
@@ -298,8 +312,12 @@ void repairfiles(void)
 		{
 		if (fgets(buffer,4095,fp)!=NULL)
 			{
-			if (strip==true)
-				stripdirs((char*)&buffer[0]);
+		if (strip==true)
+			stripdirs((char*)&buffer[0]);
+
+		if (prefix==true || strip==true)
+			addprefix((char*)&buffer[0]);
+
 			fgets(data,40,fp);
 			char *perms,*uid,*gid;
 
@@ -331,16 +349,13 @@ void parsedir(char *filename)
 
 	while( NULL != (dir_entry_p = readdir(dir_p)))
 		{
+
 		if (skipdir(dir_entry_p->d_name)==true)
 			continue;
-
 		if (strcasecmp(filename,"/")==0)//root dir special case i hate special cases!
 			sprintf(buffer,"/%s",dir_entry_p->d_name);		
 		else	
 			sprintf(buffer,"%s/%s",filename,dir_entry_p->d_name);
-
-		if (strip==true)
-			stripdirs((char*)&buffer[0]);
 
 		if (skipexclude(buffer)==true)
 			continue;
@@ -419,12 +434,14 @@ printf("Usage: perms [OPTION] [STARTDIRECTORY]\n"
 
 int main(int argc, char **argv)
 {
+
 	int c;
+	struct	stat	stat_p;
 
 	while (1)
 		{
 		int option_index = 0;
-		c = getopt_long (argc, argv, ":es:qcrnuS?hlVfv",long_options, &option_index);
+		c = getopt_long (argc, argv, ":esp:qcrnuS?hlVfv",long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -483,6 +500,11 @@ int main(int argc, char **argv)
 				stripbuffer=optarg;
 				break;
 		
+			case 'p':
+				prefix=true;
+				strcpy(prefixbuffer,optarg);
+				break;
+		
 			case '?':
 			case 'h':
 				printhelp();
@@ -504,9 +526,6 @@ int main(int argc, char **argv)
 			return 1;
 			}
 		}
-
-
-struct	stat	stat_p;
 
 	stat(".",&stat_p);
 	thisdevice=stat_p.st_dev;
@@ -537,6 +556,12 @@ struct	stat	stat_p;
 		repairfiles();
 		return 0;
 		}
+
+	if (strip==true)
+		stripdirs((char*)&cwd[0]);
+
+	if (prefix==true || strip==true)
+		addprefix((char*)&cwd[0]);
 
 	parsedir((char*)cwd);
 
