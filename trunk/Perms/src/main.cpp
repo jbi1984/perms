@@ -37,6 +37,7 @@
 #include <stdarg.h>
 
 #define DBNAME "./.permsDB"
+#define VERSION "0.0.6"
 
 struct option long_options[] =
 	{
@@ -44,13 +45,14 @@ struct option long_options[] =
 		{"repair",0,0,'r'},
 		{"quiet",0,0,'q'},
 		{"nolinks",0,0,'n'},
-		{"system",0,0,'s'},
+		{"system",0,0,'S'},
 		{"users",0, 0,'u'},
 		{"exclude",1,0,'e'},
 		{"leave",0,0,'l'},
-		{"verify",0,0,'v'},
+		{"verify",0,0,'V'},
 		{"fix",0,0,'f'},
-		{"strip",1,0,'t'},
+		{"strip",1,0,'s'},
+		{"version",0,0,'v'},
 		{"help",0,0,'?'},
 		{0, 0, 0, 0}
 	};
@@ -383,11 +385,46 @@ void parsedir(char *filename)
 
 void printhelp(void)
 {
+printf("Usage: perms [OPTION] [STARTDIRECTORY]\n"
+	"Create a database of permissions, uids and guids for files stating at [STARTDIRECTORY]\n"
+	" -c, --create	create a database\n"
+	" -r, --repair	repair file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n"
+	" -V, --verify	verify file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n"
+	" -f, --fix	when used with the --verify switch will attempt to repair the permissions, users and groups\n"
+	" -q, --quiet	only report errors\n"
+	" -n, --nolinks	don't recurse into folders that are links\n"
+	" -S, --system	recurse into the system folders /sys,/proc,/dev, /tmp, /lost+found (Setting permissions on these files doesn't make a lot of sense as they are (mostly) recreated at boot time)\n"
+	" -u, --users	same as above but for the /home folder\n"
+	" -e, --exclude	exclude a directory from the database, one --exclude for every folder FULL path names only, or '.' for current directory\n"
+	" -l, --leave	go into other file systems, default is to stay on the same device\n"
+	" -v, --version	output version information and exit\n"
+	" -h, -?, --help	print this help\n\n"
+	"[STARTDIRECTORY] is optional if not included the current directory is used\n\n"
+	"Examples:\n\n"
+	"List the permssions for all files in directory '/etc but not for /etc/webmin'\n"
+	" perms -e /etc/webmin /etc\n"
+	"Create a database in / including the /home folder\n"
+	" sudo perms --create --users /\n"
+	"Repair permissions for user 'someuser', obviously you must have created the database first!\n"
+	" cd /home/someuser && sudo perms --repair\n"
+	"Verify and fix  permissions for the current directory\n"
+	" perms --verify --fix\n"
+	"Repair permissions for the current directory\n"
+	" perms --repair\n\n"
+	"You may need to run perms as root to be able to read/repair certain folders.\n\n"
+	"Stat errors for a file usually indicate a broken link, a deleted file (when repairing or verifying) or a circular link reference, ie /usr/bin/X11/X11 which is a symlink to /usr/bin/X11!\n\n"
+	"Report bugs to kdhedger@yahoo.co.uk\n"
+	);
+}
+
+/*
+void printhelp(void)
+{
 	printf("Usage: perms [OPTION] [STARTDIRECTORY]\n");
 	printf("Create a database of permissions, uids and guids for files stating at [STARTDIRECTORY]\n");
 	printf("-c, --create	create a database\n");
 	printf("-r, --repair	repair file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n");
-	printf("-v, --verify	verify file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n");
+	printf("-y, --verify	verify file permissions using the database in [STARTDIRECTORY] if given if not in the current directory\n");
 	printf("-f, --fix	when used with the --verify switch will attempt to repair the permissions, users and groups\n");
 	printf("-q, --quiet	only report errors\n");
 	printf("-n, --nolinks	don't recurse into folders that are links\n");
@@ -396,6 +433,7 @@ void printhelp(void)
 	printf("		if /home is on a seperate partition you may need to use the -l switch as well\n");
 	printf("-e, --exclude	exclude a directory from the database, one --exclude for every folder FULL path names only\n");
 	printf("-l, --leave	go into other file systems, default is to stay on the same device\n");
+	printf("-v, --version	output version information and exit\n");
 	printf("-h, -?, --help	print this help\n\n");
 	printf("[STARTDIRECTORY] is optional if not included the current directory is used\n\n");
 	printf("Examples:\n\n");
@@ -414,7 +452,7 @@ void printhelp(void)
 	printf("ie /usr/bin/X11/X11 which is a symlink to usr/bin/X11!\n\n");
 	printf("Report bugs to kdhedger@yahoo.co.uk\n");
 }
-
+*/
 int main(int argc, char **argv)
 {
 	int c;
@@ -422,7 +460,7 @@ int main(int argc, char **argv)
 	while (1)
 		{
 		int option_index = 0;
-		c = getopt_long (argc, argv, ":et:qcrnus?hlvf",long_options, &option_index);
+		c = getopt_long (argc, argv, ":es:qcrnuS?hlVfv",long_options, &option_index);
 		if (c == -1)
 			break;
 
@@ -446,7 +484,7 @@ int main(int argc, char **argv)
 				nolinks=true;
 				break;
 		
-			case 's':
+			case 'S':
 				incsystem=true;
 				break;
 		
@@ -463,15 +501,20 @@ int main(int argc, char **argv)
 				break;
 		
 		
-			case 'v':
+			case 'V':
 				verify=true;
+				break;
+		
+			case 'v':
+				printf("perms %s\n",VERSION);
+				return 0;
 				break;
 		
 			case 'f':
 				fix=true;
 				break;
 		
-			case 't':
+			case 's':
 				strip=true;
 				stripbuffer=optarg;
 				break;
@@ -518,9 +561,7 @@ struct	stat	stat_p;
 		}
 
 	if (verify==true)
-		{
 		return (verifyperms());
-		}
 
 	printout("sosisin","Permissions for .=",stat_p.st_mode," owner=",stat_p.st_uid," group=",stat_p.st_gid);
 
