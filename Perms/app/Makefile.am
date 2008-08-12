@@ -8,3 +8,6 @@ perms_CFLAGS = -O3
 
 bin_PROGRAMS = perms
 
+man1_MANS = ../resources/man/perms.man
+
+
