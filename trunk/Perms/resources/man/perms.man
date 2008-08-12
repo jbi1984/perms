@@ -10,38 +10,40 @@ Create a database of permissions, uids and guids for files stating at [STARTDIRE
 .TP
 \fB\-c\fR, \fB\-\-create\fR
 create a database
-.TP
-\fB\-r\fR, \fB\-\-repair\fR
-repair file permissions using the database in [STARTDIRECTORY] if given if not in the current directory
-.TP
-\fB\-V\fR, \fB\-\-verify\fR
-verify file permissions using the database in [STARTDIRECTORY] if given if not in the current directory
+.HP
+\fB\-e\fR, \fB\-\-exclude\fR=\fI[DIR]\fR exclude a directory from the database, one \fB\-\-exclude\fR for every folder FULL path names only, or '.' for current directory
 .TP
 \fB\-f\fR, \fB\-\-fix\fR
 when used with the \fB\-\-verify\fR switch will attempt to repair the permissions, users and groups
-.TP
-\fB\-q\fR, \fB\-\-quiet\fR
-only report errors
-.TP
-\fB\-n\fR, \fB\-\-nolinks\fR
-don't recurse into folders that are links
-.TP
-\fB\-S\fR, \fB\-\-system\fR
-recurse into the system folders /sys,/proc,/dev, /tmp, /lost+found (Setting permissions on these files doesn't make a lot of sense as they are (mostly) recreated at boot time)
-.TP
-\fB\-u\fR, \fB\-\-users\fR
-same as above but for the /home folder
-.TP
-\fB\-e\fR, \fB\-\-exclude\fR
-exclude a directory from the database, one \fB\-\-exclude\fR for every folder FULL path names only, or '.' for current directory
+.HP
+\fB\-h\fR, \-?, \fB\-\-help\fR print this help
 .TP
 \fB\-l\fR, \fB\-\-leave\fR
 go into other file systems, default is to stay on the same device
 .TP
+\fB\-n\fR, \fB\-\-nolinks\fR
+don't recurse into folders that are links
+.TP
+\fB\-q\fR, \fB\-\-quiet\fR
+only report errors
+.TP
+\fB\-r\fR, \fB\-\-repair\fR
+repair file permissions using the database in [STARTDIRECTORY] if given if not in the current directory
+.TP
+\fB\-s\fR, \fB\-\-strip\fR=\fI[DIR]\fR
+strip [DIR] out of the filepaths when creating, repairing or verifying a database and replace with '.' (for current directory)
+.TP
+\fB\-u\fR, \fB\-\-users\fR
+same as above but for the /home folder
+.TP
 \fB\-v\fR, \fB\-\-version\fR
 output version information and exit
-.HP
-\fB\-h\fR, \-?, \fB\-\-help\fR print this help
+.TP
+\fB\-S\fR, \fB\-\-system\fR
+recurse into the system folders /sys,/proc,/dev, /tmp, /lost+found (Setting permissions on these files doesn't make a lot of sense as they are (mostly) recreated at boot time)
+.TP
+\fB\-V\fR, \fB\-\-verify\fR
+verify file permissions using the database in [STARTDIRECTORY] if given if not in the current directory
 .PP
 [STARTDIRECTORY] is optional if not included the current directory is used
 .SH EXAMPLES
