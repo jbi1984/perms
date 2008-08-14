@@ -38,7 +38,7 @@
 #include <fcntl.h>
 
 #define DBNAME "./.permsDB"
-#define VERSION "0.0.9"
+#define VERSION "0.0.10"
 
 struct option long_options[] =
 	{
