@@ -35,9 +35,10 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <stdarg.h>
+#include <fcntl.h>
 
 #define DBNAME "./.permsDB"
-#define VERSION "0.0.7"
+#define VERSION "0.0.9"
 
 struct option long_options[] =
 	{
@@ -124,7 +125,7 @@ bool insidesysdirs(char *filename)
 
 	if (S_ISLNK(linkstat.st_mode))
 		{
-		staterr=readlink (filename,buffer,4095);
+		staterr=readlink(filename,buffer,4095);
 		if (staterr==-1)
 			retval=false;
 		else
@@ -339,8 +340,12 @@ void parsedir(char *filename)
 {
 	DIR	*dir_p;
 	struct	dirent	*dir_entry_p;
-	struct	stat	stat_p,linkstat;
+	struct	stat	stat_p,linkstat,errstat;
+
+	
 	int	staterr=-1;
+	int	lstaterr=-1;
+	int	errstaterr=-1;
 	char	buffer[4096];
 
 	dir_p = opendir(filename);
@@ -377,8 +382,8 @@ void parsedir(char *filename)
 				{
 				if (nolinks==true)
 					{
-					staterr=lstat(buffer,&linkstat);
-					if ( staterr==-1)
+					lstaterr=lstat(buffer,&linkstat);
+					if (lstaterr==-1)
 						{
 						fprintf(stderr," Error occoured attempting to stat %s\n", dir_entry_p->d_name);
 						}
@@ -499,7 +504,7 @@ int main(int argc, char **argv)
 				strip=true;
 				stripbuffer=optarg;
 				break;
-		
+
 			case 'p':
 				prefix=true;
 				strcpy(prefixbuffer,optarg);
@@ -567,6 +572,7 @@ int main(int argc, char **argv)
 
 	if (fp!=0)
 		fclose(fp);
+
 	return 0;
 }
 
